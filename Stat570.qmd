@@ -1,0 +1,398 @@
+---
+title: "STAT 570 Final Project"
+author: "Ekinsu Çiçek, Kübra Nur Akdemir, Oğuzhan Aydın, Mehmet Ali Erkan"
+format: 
+  html:
+    embed-resources: true
+editor: visual
+---
+
+# Dataset of Exceptional Women Directors and Carbon Information of Global Energy Companies
+
+The data used in this project gives valuable information about the EWD( Exceptional Women Director) score and CID(Carbon Information Disclosures) score of international leading energy companies between the years 2018 and 2020. In order to create a more sustainable future, the data is helpful for researchers examining women's participation in net-zero emissions, gender equality, climate resilience, renewable energy, and energy transition in corporate boardrooms.
+
+![](images/WhatsApp%20Image%202024-01-03%20at%2018.39.20.jpeg){fig-align="center"}
+
+According to the linked study article by Majid and Jaaffar (2023), the data includes 97 companies with 291 observations from Thomson Reuters listings. Purposive random sampling was used to choose the companies for the sample based on the data collected. 
+
+![](images/WhatsApp%20Image%202024-01-02%20at%2016.04.29.jpeg)
+
+REFERENCE
+
+Majid, N. A., & Jaaffar, A. H. (2023). The effect of women's leadership on carbon disclosure by the top 100 global energy leaders. *Sustainability*, *15*(11), 8491. https://doi.org/10.3390/su15118491
+
+## 
+
+## Reading and Cleaning the Data
+
+### Necessary Libraries
+
+```{r,message=F,warning=FALSE}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(jmv)
+library(leaflet)
+library(plotrix)
+library(httr)
+library(rvest)
+library(sqldf)
+```
+
+### Downloading and Reading the Data
+
+First, we define the working directory (optional), then we define the link for the zip file of the dataset. After,
+
+we set out the local file name for this zip file, then we download it. Afterwards, we unzip the file and define the names of the excel files.
+
+```{r,message=F,warning=F}
+#defining working directory
+setwd("/Users/mehmeterkan/Desktop")
+#defining the link for the data
+zipF <- "https://prod-dcd-datasets-cache-zipfiles.s3.eu-west-1.amazonaws.com/d2s9yz65mm-4.zip"
+#set out the local file name for the zip file
+local_zip_filename <- "Dataset of Women Directors Engagement.zip"
+#downloading the data
+download.file(zipF, local_zip_filename, mode = "wb", method = "auto")
+#unzip the file
+unzip(local_zip_filename)
+#defining the name of the excel files
+excel_files <- c("CID Scores (Table A).xlsx", "WDs Engagement (Table B).xlsx", "EWDs Aggregated Score (Table C).xlsx")
+```
+
+### Reading the Each Excel File
+
+#### CID Scores (Table A)
+
+![](images/CID.png){fig-align="center"}
+
+This excel sheet includes information about binary and total CID scores of the companies between the years 2018 and 2020. First of all, we read the CID Scores excel file and read each sheet separately.
+
+```{r,message=F,warning=F}
+#defining working directory as the file name
+setwd("/Users/mehmeterkan/Desktop/Dataset of Women Directors’ Engagement and Carbon Information Disclosures of Global Energy Companies")
+#reading each sheet in the excel file
+CID_2018 <- read_excel("CID Scores (Table A).xlsx", sheet = "FYE 2018")
+CID_2019 <- read_excel("CID Scores (Table A).xlsx", sheet = "FYE 2019")
+CID_2020 <- read_excel("CID Scores (Table A).xlsx", sheet = "FYE 2020")
+```
+
+After reading the sheets, we found out some empty columns, and delete them. After that, we define the column names for the tables. We add year as a new variable into tables and combine all three table into one table. Lastly, we convert variables into numeric except company_name and year.
+
+```{r,message=F,warning=F}
+#deleting unnecessary rows
+CID_2018 <- CID_2018[-c(1,2),]
+CID_2019 <- CID_2019[-c(1,2),]
+CID_2020 <- CID_2020[-c(1,2),]
+
+#setting common column names
+set_column_names <- function(data, year) {
+  colnames(data) <- c("company_name", "strategy_policy", "climate_change_opportunities",
+                      "corporate_ghg_emissions_targets", "company_wide_carbon_footprint",
+                      "ghg_emissions_change_over_time", "energy_related_reporting",
+                      "emission_reduction_initiatives_implementation",
+                      "carbon_emission_accountability", "quality_of_disclosure",
+                      paste0("quality_of_DisclosureTotal_cid_scores"),"year")
+  
+  data$year <- year
+  
+  return(data)
+}
+
+CID_2018 <- set_column_names(CID_2018,"2018")
+CID_2019 <- set_column_names(CID_2019,"2019")
+CID_2020 <- set_column_names(CID_2020,"2020")
+
+#combining all the tables into one table
+CID_scores <- rbind(CID_2018, CID_2019,CID_2020)
+#converting variables to numeric
+CID_scores <- CID_scores %>%
+  mutate_at(vars(-company_name, -year), as.numeric)
+```
+
+##### CID Scores Table After Cleaning
+
+```{r}
+head(CID_scores,10)
+```
+
+#### WDs Engagement (Table B)
+
+![](images/Screenshot%202024-01-07%20at%2023.03.51.png)
+
+This excel file contains information about the percentage of WD's involved on the board and according to their classification between 2018 and 2020. First of all, we read the WDs Engagement excel file and read each sheet separately.
+
+```{r,message=F,warning=F}
+#defining working directory as the file name
+setwd("/Users/mehmeterkan/Desktop/Dataset of Women Directors’ Engagement and Carbon Information Disclosures of Global Energy Companies")
+#reading each sheet one by one
+WDs_2018 <- read_xlsx("WDs Engagement (Table B).xlsx", sheet = "FYE 2018")
+WDs_2019 <- read_xlsx("WDs Engagement (Table B).xlsx", sheet = "FYE 2019")
+WDs_2020 <- read_xlsx("WDs Engagement (Table B).xlsx", sheet = "FYE 2020")
+
+```
+
+After reading the sheets, we found out some empty columns, and delete them. After that, we define the column names for the tables. We add year as a new variable into tables and combine all three table into one table. Then, we convert columns to numeric expect the company_name and year column.
+
+```{r,message=F,warning=F}
+#deleting uncesessary rows
+WDs_2018 <- WDs_2018[-1,]
+WDs_2019 <- WDs_2019[-1,]
+WDs_2020 <- WDs_2020[-1,]
+
+#setting common column names
+set_column_names_2 <- function(data, year) {
+  colnames(data) <- c("company_name", "number_of_wd", "per_of_wd_on_board", 
+                      "per_of_wd_industry_expert", 
+                      "per_of_wd_advisors","per_of_wd_community_leader")
+  
+  data$year <- year
+  
+  return(data)
+}
+
+WDs_2018 <- set_column_names_2(WDs_2018,"2018")
+WDs_2019 <- set_column_names_2(WDs_2019,"2019")
+WDs_2020 <- set_column_names_2(WDs_2020,"2020")
+
+#combining all the tables in one table
+WDs_engagement <- rbind(WDs_2018, WDs_2019, WDs_2020)
+
+#converting columns to numeric (excluding company_name,year)
+WDs_engagement <- WDs_engagement |> 
+  mutate_at(vars(-company_name,-year), function(x) round(as.numeric(sub("%", "", x)), 2))
+```
+
+##### WDs Engagement Table After Cleaning
+
+```{r}
+head(WDs_engagement,10)
+```
+
+#### EWDs Aggregated Scores (Table C)
+
+![](images/EWDs.png){fig-align="center"}
+
+This file has the information about EWD's engagement scores are indicated by the total score across the four EWD parameters. First of all, we read the EWDs Aggregated Scores excel file and read each sheet separately.
+
+```{r,message=F,warning=F}
+#defining working directory as the file name
+setwd("/Users/mehmeterkan/Desktop/Dataset of Women Directors’ Engagement and Carbon Information Disclosures of Global Energy Companies")
+#reading each sheet in the excel file
+EWDs_2018 <- read_xlsx("EWDs Aggregated Score (Table C).xlsx", sheet = "FYE 2018")
+EWDs_2019 <- read_xlsx("EWDs Aggregated Score (Table C).xlsx", sheet = "FYE 2019")
+EWDs_2020 <- read_xlsx("EWDs Aggregated Score (Table C).xlsx", sheet = "FYE 2020")
+```
+
+we define the column names for the tables. We add year as a new variable into tables.Then, we replace name in empty spaces and combine all three table into one table.
+
+```{r,message=F,warning=F}
+#setting common column names
+set.column.names <- function(data,year) {
+  colnames(data) <- c("company_name", "code", "WDsName", "industry_expert", 
+                      "advisor", "community_leaders", "energy_experiments", "log_of_energy_experiment")
+  data$year <- year
+  
+  return(data)
+}
+EWDs_2018 <- set.column.names(EWDs_2018,"2018")
+EWDs_2019 <- set.column.names(EWDs_2019,"2019")
+EWDs_2020 <- set.column.names(EWDs_2020,"2020")
+
+#replacing name in empty space
+for (i in 1:4) {EWDs_2018 <- EWDs_2018 |> 
+  mutate('company_name' = ifelse(is.na(company_name), lag(company_name), company_name))}
+for (i in 1:5) {EWDs_2019 <- EWDs_2019 |> 
+  mutate('company_name' = ifelse(is.na(company_name), lag(company_name), company_name))}
+for (i in 1:6) {EWDs_2020 <- EWDs_2020 |> 
+  mutate('company_name' = ifelse(is.na(company_name), lag(company_name), company_name))}
+
+#combining all the tables into one table
+EWDs_scores <- rbind(EWDs_2018,EWDs_2019,EWDs_2020)
+```
+
+Then, we manipulate the data and add a new column wd_title based on the energy experiments of the directors.
+
+```{r,message=F,warning=F}
+#converting energy_experiments variable into numeric
+EWDs_scores$energy_experiments <- as.numeric(EWDs_scores$energy_experiments)
+#adding new column as wd_title accoring to the energy_experiments
+EWDs_scores <- EWDs_scores |> 
+   mutate(wd_title = cut(energy_experiments, breaks = c(-Inf, 0 ,15, 30, 49),                         labels = c("No Experience","Assistant Director", "Director","Senior Director"), include.lowest = TRUE))
+```
+
+##### EWDs Scores Table After Cleaning
+
+```{r}
+head(EWDs_scores,10)
+```
+
+## Descriptive Statistics
+
+### CID Scores Table
+
+```{r}
+descriptives(
+  data = CID_scores,
+  vars = c("strategy_policy", "climate_change_opportunities", "corporate_ghg_emissions_targets", "company_wide_carbon_footprint",
+"ghg_emissions_change_over_time", "energy_related_reporting", "emission_reduction_initiatives_implementation",
+"carbon_emission_accountability","quality_of_disclosure", "quality_of_DisclosureTotal_cid_scores"),
+  freq = TRUE,
+  hist = TRUE,
+  dens = TRUE,
+  sd = TRUE)
+```
+
+### WDs Engagement Table
+
+```{r}
+descriptives(
+  data = WDs_engagement,
+  vars = c("number_of_wd", "per_of_wd_on_board", 
+                      "per_of_wd_industry_expert", 
+                      "per_of_wd_advisors","per_of_wd_community_leader"),
+  freq = TRUE,
+  hist = TRUE,
+  dens = TRUE,
+  sd = TRUE)
+```
+
+### EWDs Scores Table
+
+```{r}
+descriptives(
+  data = EWDs_scores,
+  vars = c("industry_expert","advisor", "community_leaders", "energy_experiments", "log_of_energy_experiment"),
+  freq = TRUE,
+  hist = TRUE,
+  dens = TRUE,
+  sd = TRUE)
+```
+
+## Analysis
+
+### What are the companies with the highest average quality of disclosure total of CID scores of three years 2018,2019,2020?
+
+```{r}
+#finding the mean cid_scores of three years for each company and slicing the highest ten
+mean_cid <- CID_scores %>%
+    filter(year %in% c("2018", "2019", "2020")) %>%
+    group_by(company_name) %>%
+    summarize(avg_cid_score = mean(quality_of_DisclosureTotal_cid_scores, na.rm = TRUE)) |> 
+  slice_max(order_by=avg_cid_score,n=10)
+mean_cid
+```
+
+```{r,warning=FALSE}
+plot_ly(data = mean_cid, x = ~company_name, y = ~avg_cid_score, type = 'bar', color = ~avg_cid_score) %>%
+  layout(title = "Top 10 Companies by Average Score",
+         xaxis = list(title = "Company Name", categoryorder = 'total descending'),
+         yaxis = list(title = "Average Score", range = c(75, 85)))
+
+```
+
+### How does the percentage of experience levels of women directors change between the years 2018 and 2020?
+
+```{r}
+#creating proportion table for year 2018
+EWDs_scores_2018 <- EWDs_scores |> select(wd_title, year) |> 
+  filter(year == "2018") |> na.omit()
+tab1 <- prop.table(table(EWDs_scores_2018$wd_title))
+df1 <- data.frame(wd_title=names(tab1), proportion=as.numeric(tab1))
+
+#creating proportion table for year 2019
+EWDs_scores_2019 <- EWDs_scores |> select(wd_title, year) |> 
+  filter(year == "2019") |> na.omit()
+tab2 <- prop.table(table(EWDs_scores_2019$wd_title))
+df2 <- data.frame(wd_title=names(tab2), proportion=as.numeric(tab2))
+
+#creating proportion table for year 2020
+EWDs_scores_2020 <- EWDs_scores |> select(wd_title, year) |> 
+  filter(year == "2020") |> na.omit()
+tab3 <- prop.table(table(EWDs_scores_2020$wd_title))
+df3 <- data.frame(wd_title=names(tab3), proportion=as.numeric(tab3))
+```
+
+```{r}
+par(mfrow=c(1,3))
+pie3D(df1$proportion, labels = round(df1$proportion,2),
+      main = "Percentage of Experience\nLevel of Women Directors in 2018", col = rainbow(length(df1$proportion)))
+legend("topright", c("No Experience", "Assistant Director", "Director", "Senior Director"),
+       cex = 0.5, fill = rainbow(length(df1$proportion)))
+pie3D(df2$proportion, labels = round(df2$proportion,2),
+      main = "Percentage of Experience\nLevel of Women Directors in 2019", col = rainbow(length(df2$proportion)))
+legend("topright", c("No Experience", "Assistant Director", "Director", "Senior Director"),
+       cex = 0.5, fill = rainbow(length(df2$proportion)))
+pie3D(df3$proportion, labels = round(df3$proportion,2),
+      main = "Percentage of Experience\nLevel of Women Directors in 2020", col = rainbow(length(df3$proportion)))
+legend("topright", c("No Experience", "Assistant Director", "Director", "Senior Director"),
+       cex = 0.5, fill = rainbow(length(df3$proportion)))
+```
+
+### What are the number of energy companies of the countries and continents?
+
+```{r,warning=F}
+company <- read.csv('/Users/mehmeterkan/Desktop/company.csv', sep = ";")
+company <- company[,-1]
+table(company$Continent)
+
+url_ulke <- "https://developers.google.com/public-data/docs/canonical/countries_csv?hl=en"
+res <- GET(url_ulke)
+html_con <- content(res, "text")
+html_ulke <- read_html(html_con)
+
+# Extract all tables from the webpage
+tables <- html_ulke %>%
+  html_nodes("table") %>%
+  html_table()
+
+long_lat_country <- tables[[1]]
+long_lat_country <- long_lat_country[,-1]
+colnames(long_lat_country)[3] <- "Country"
+toplu_son_mu <- merge(x = company, y = long_lat_country, by = "Country", all.x = TRUE)
+
+df <- sqldf::sqldf("SELECT Country, continent, latitude, longitude, COUNT(*) AS Freq 
+             FROM toplu_son_mu
+             GROUP BY Country
+                   ORDER BY Freq DESC")
+df_son <- (sqldf::sqldf("SELECT Freq,A.* FROM df B LEFT JOIN toplu_son_mu A ON A.latitude=B.latitude"))
+
+
+
+center_lon <- median(df$longitude, na.rm = TRUE)
+center_lat <- median(df$lattitude, na.rm = TRUE)
+
+getColor <- function(df) {
+  sapply(df$Freq, function(mag) {
+    if(mag <= 2) {
+      "green"
+    } else if(mag <= 4) {
+      "orange"
+    } else {
+      "red"
+    } })
+}
+
+icons <- awesomeIcons(
+  icon = 'ios-close',
+  iconColor = 'black',
+  library = 'ion',
+  markerColor = getColor(df)
+)
+str(df)
+leaflet() %>%
+  addProviderTiles(providers$Esri.WorldStreetMap,
+                   options = providerTileOptions(noWrap = TRUE)) %>%
+  addAwesomeMarkers(
+    data = df_son,
+    lng = ~longitude,
+    lat = ~latitude,
+    label = ~Country,
+    icon = icons,
+    popup = ~paste("<br>Number of Company:", Freq,
+                   "<br>Company Names:", company_name),
+    clusterOptions = markerClusterOptions()
+  )
+  
+```
